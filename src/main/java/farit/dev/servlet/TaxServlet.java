@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Objects;
 
+@WebServlet("/tax")
 public class TaxServlet extends HttpServlet {
 
     private TaxRateService taxRateService;

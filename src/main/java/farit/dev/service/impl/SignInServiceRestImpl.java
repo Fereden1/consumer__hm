@@ -1,6 +1,5 @@
 package farit.dev.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import farit.dev.dto.SignInRequest;
 import farit.dev.dto.SignInResponse;
 import farit.dev.service.SignInService;
@@ -15,11 +14,9 @@ import java.time.Duration;
 public class SignInServiceRestImpl implements SignInService {
 
     private final HttpClient httpClient;
-    private final ObjectMapper objectMapper;
     private static final URI SIGN_IN_URI = URI.create("http://localhost:80/app1/api/sign-in");
 
     public SignInServiceRestImpl() {
-        objectMapper = new ObjectMapper();
         httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(3))
                 .build();
@@ -32,16 +29,14 @@ public class SignInServiceRestImpl implements SignInService {
                     buildRequest(request),
                     HttpResponse.BodyHandlers.ofString()
             );
-
             return parseResponse(response);
         } catch (Exception e) {
             return error(e.getMessage());
         }
     }
 
-    @SneakyThrows
     private HttpRequest buildRequest(SignInRequest request) {
-        String json = objectMapper.writeValueAsString(request);
+        String json = "{\"username\":\"" + request.username() + "\",\"password\":\"" + request.password() + "\"}";
         return HttpRequest.newBuilder(SIGN_IN_URI)
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
@@ -51,14 +46,39 @@ public class SignInServiceRestImpl implements SignInService {
 
     private SignInResponse parseResponse(HttpResponse<String> rs) {
         try {
-            SignInResponse resp = objectMapper.readValue(rs.body(), SignInResponse.class);
-            if(rs.statusCode() != 200) {
+            if (rs.statusCode() != 200) {
                 return error("Not 200 code!");
             }
-            return resp;
+            String json = rs.body();
+            boolean success = json.contains("\"success\":true") || json.contains("\"success\": true");
+            String token = readJsonString(json, "token");
+            String message = readJsonString(json, "message");
+            return new SignInResponse(success, token, message);
         } catch (Exception e) {
             return error("Cannot parse response");
         }
+    }
+
+    private String readJsonString(String json, String key) {
+        String pattern = "\"" + key + "\"";
+        int i = json.indexOf(pattern);
+        if (i < 0) {
+            return null;
+        }
+        int colon = json.indexOf(':', i);
+        int quote = json.indexOf('"', colon + 1);
+        if (quote < 0) {
+            return null;
+        }
+        int end = json.indexOf('"', quote + 1);
+        if (end < 0) {
+            return null;
+        }
+        String value = json.substring(quote + 1, end);
+        if ("null".equals(value)) {
+            return null;
+        }
+        return value;
     }
 
     private SignInResponse error(String error) {
